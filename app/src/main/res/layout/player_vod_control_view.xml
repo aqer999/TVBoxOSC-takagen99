@@ -313,16 +313,6 @@
                 android:layout_marginEnd="@dimen/vs_8"
                 android:layout_marginRight="@dimen/vs_8" />
 
-            <ImageView
-                android:id="@+id/tv_resolution_icon"
-                android:layout_width="@dimen/vs_50"
-                android:layout_height="@dimen/vs_40"
-                android:layout_gravity="center"
-                android:layout_marginEnd="@dimen/vs_10"
-                android:layout_marginRight="@dimen/vs_10"
-                android:src="@drawable/vid_1080p"
-                android:visibility="gone" />
-
             <TextView
                 android:id="@+id/tv_resolution"
                 android:layout_width="wrap_content"
@@ -553,7 +543,6 @@
             android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/tv_current_program_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="left"
@@ -573,7 +562,7 @@
 
             <TextView
                 android:id="@+id/tv_time"
-                android:layout_width="@dimen/vs_320"
+                android:layout_width="@dimen/vs_480"
                 android:layout_height="wrap_content"
                 android:layout_gravity="right"
                 android:fontFamily="@font/advent_pro_extralight"
@@ -597,12 +586,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="left"
-            android:layout_marginBottom="@dimen/vs_20"
+            android:layout_marginBottom="@dimen/vs_5"
             android:gravity="left"
             android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/tv_channel_bottom_number"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="left"
@@ -622,7 +610,7 @@
 
             <TextView
                 android:id="@+id/tv_time_end"
-                android:layout_width="@dimen/vs_320"
+                android:layout_width="@dimen/vs_480"
                 android:layout_height="wrap_content"
                 android:layout_gravity="right"
                 android:fontFamily="@font/advent_pro_extralight"
@@ -644,6 +632,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/vs_15"
             android:layout_marginBottom="@dimen/vs_15"
             android:orientation="horizontal">
 
@@ -1047,7 +1036,7 @@
         <LinearLayout
             android:id="@+id/parse_root"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="@dimen/vs_40"
             android:layout_marginBottom="@dimen/vs_10"
             android:orientation="horizontal"
             android:visibility="gone"

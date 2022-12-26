@@ -48,6 +48,8 @@ import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.MD5;
+import com.github.tvbox.osc.util.SearchHelper;
+import com.github.tvbox.osc.util.SubtitleHelper;
 import com.github.tvbox.osc.viewmodel.SourceViewModel;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -72,6 +74,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -115,6 +118,7 @@ public class DetailActivity extends BaseActivity {
     public String sourceKey;
     boolean seriesSelect = false;
     private View seriesFlagFocus = null;
+    private HashMap<String, String> mCheckSources = null;
 
     private BroadcastReceiver pipActionReceiver;
     private static final int PIP_BOARDCAST_ACTION_PREV = 0;
@@ -524,6 +528,7 @@ public class DetailActivity extends BaseActivity {
                             llPlayerFragmentContainer.setVisibility(View.VISIBLE);
                             llPlayerFragmentContainerBlock.setVisibility(View.VISIBLE);
                             llPlayerFragmentContainerBlock.requestFocus();
+                            toggleSubtitleTextSize();
                         }
                         // startQuickSearch();
                     } else {
@@ -630,7 +635,12 @@ public class DetailActivity extends BaseActivity {
         searchResult();
     }
 
+    private void initCheckedSourcesForSearch() {
+        mCheckSources = SearchHelper.getSourcesForSearch();
+    }
+
     private void startQuickSearch() {
+        initCheckedSourcesForSearch();
         if (hadQuickStart)
             return;
         hadQuickStart = true;
@@ -695,6 +705,9 @@ public class DetailActivity extends BaseActivity {
         ArrayList<String> siteKey = new ArrayList<>();
         for (SourceBean bean : searchRequestList) {
             if (!bean.isSearchable() || !bean.isQuickSearch()) {
+                continue;
+            }
+            if (mCheckSources != null && !mCheckSources.containsKey(bean.getKey())) {
                 continue;
             }
             siteKey.add(bean.getKey());
@@ -879,6 +892,7 @@ public class DetailActivity extends BaseActivity {
         tvSort.setFocusable(!fullWindows);
         tvCollect.setFocusable(!fullWindows);
         tvQuickSearch.setFocusable(!fullWindows);
+        toggleSubtitleTextSize();
 
         // Hide navbar only when video playing on full window, else show navbar
         if (fullWindows) {
@@ -886,5 +900,13 @@ public class DetailActivity extends BaseActivity {
         } else {
             showSystemUI();
         }
+    }
+
+    void toggleSubtitleTextSize() {
+        int subtitleTextSize = SubtitleHelper.getTextSize(this);
+        if (!fullWindows) {
+            subtitleTextSize *= 0.5;
+        }
+        EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_SUBTITLE_SIZE_CHANGE, subtitleTextSize));
     }
 }

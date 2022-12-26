@@ -52,7 +52,7 @@ public class ApiDialog extends BaseDialog {
     public ApiDialog(@NonNull @NotNull Context context) {
         super(context);
         setContentView(R.layout.dialog_api);
-        setCanceledOnTouchOutside(false);
+        setCanceledOnTouchOutside(true);
         ivQRCode = findViewById(R.id.ivQRCode);
         tvAddress = findViewById(R.id.tvAddress);
         inputApi = findViewById(R.id.input);
@@ -61,6 +61,12 @@ public class ApiDialog extends BaseDialog {
             @Override
             public void onClick(View v) {
                 String newApi = inputApi.getText().toString().trim();
+                // takagen99: Convert all to clan://localhost format
+                if (newApi.startsWith("file://")) {
+                    newApi = newApi.replace("file://", "clan://localhost/");
+                } else if (newApi.startsWith("./")) {
+                    newApi = newApi.replace("./", "clan://localhost/");
+                }
                 if (!newApi.isEmpty()) {
                     ArrayList<String> history = Hawk.get(HawkConfig.API_HISTORY, new ArrayList<String>());
                     if (!history.contains(newApi))
