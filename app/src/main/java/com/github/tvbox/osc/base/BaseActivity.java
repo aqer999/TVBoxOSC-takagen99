@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.Build;
@@ -11,14 +12,16 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.view.View;
+import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.PermissionChecker;
-
+import com.blankj.utilcode.util.ActivityUtils;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.callback.EmptyCallback;
 import com.github.tvbox.osc.callback.LoadingCallback;
+import com.github.tvbox.osc.ui.activity.DetailActivity;
 import com.github.tvbox.osc.util.AppManager;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.LocaleHelper;
@@ -32,6 +35,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
+import io.github.inflationx.viewpump.ViewPumpContextWrapper;
 import me.jessyan.autosize.AutoSizeCompat;
 import me.jessyan.autosize.internal.CustomAdapt;
 import xyz.doikki.videoplayer.util.CutoutUtil;
@@ -50,10 +54,15 @@ public abstract class BaseActivity extends AppCompatActivity implements CustomAd
     // takagen99 : Fix for Locale change not persist on higher Android version
     @Override
     protected void attachBaseContext(Context base) {
+        Context newBase = base;
+        if (App.viewPump != null) {
+            newBase = ViewPumpContextWrapper.wrap(base, App.viewPump);
+        }
+
         if (Hawk.get(HawkConfig.HOME_LOCALE, 0) == 0) {
-            super.attachBaseContext(LocaleHelper.onAttach(base, "zh"));
+            super.attachBaseContext(LocaleHelper.onAttach(newBase, "zh"));
         } else {
-            super.attachBaseContext(LocaleHelper.onAttach(base, ""));
+            super.attachBaseContext(LocaleHelper.onAttach(newBase, ""));
         }
     }
 
@@ -70,12 +79,31 @@ public abstract class BaseActivity extends AppCompatActivity implements CustomAd
         } catch (Throwable th) {
             th.printStackTrace();
         }
+
+        // takagen99 : Set Theme Color
+        if (Hawk.get(HawkConfig.THEME_SELECT, 0) == 0) {
+            setTheme(R.style.NetfxTheme);
+        } else if (Hawk.get(HawkConfig.THEME_SELECT, 0) == 1) {
+            setTheme(R.style.DoraeTheme);
+        } else if (Hawk.get(HawkConfig.THEME_SELECT, 0) == 2) {
+            setTheme(R.style.PepsiTheme);
+        } else if (Hawk.get(HawkConfig.THEME_SELECT, 0) == 3) {
+            setTheme(R.style.NarutoTheme);
+        } else if (Hawk.get(HawkConfig.THEME_SELECT, 0) == 4) {
+            setTheme(R.style.MinionTheme);
+        } else if (Hawk.get(HawkConfig.THEME_SELECT, 0) == 5) {
+            setTheme(R.style.YagamiTheme);
+        } else {
+            setTheme(R.style.SakuraTheme);
+        }
+
         super.onCreate(savedInstanceState);
         setContentView(getLayoutResID());
         mContext = this;
         CutoutUtil.adaptCutoutAboveAndroidP(mContext, true);//设置刘海
         AppManager.getInstance().addActivity(this);
         init();
+        setScreenOn();
     }
 
     @Override
@@ -217,6 +245,10 @@ public abstract class BaseActivity extends AppCompatActivity implements CustomAd
     }
 
     public void jumpActivity(Class<? extends BaseActivity> clazz, Bundle bundle) {
+    	if (DetailActivity.class.isAssignableFrom(clazz) && Hawk.get(HawkConfig.BACKGROUND_PLAY_TYPE, 0) == 2) {
+            //1.重新打开singleTask的页面(关闭小窗) 2.关闭画中画，重进detail再开启画中画会闪退
+            ActivityUtils.finishActivity(DetailActivity.class);
+        }
         Intent intent = new Intent(mContext, clazz);
         intent.putExtras(bundle);
         startActivity(intent);
@@ -254,6 +286,27 @@ public abstract class BaseActivity extends AppCompatActivity implements CustomAd
 
     public boolean supportsTouch() {
         return getPackageManager().hasSystemFeature("android.hardware.touchscreen");
+    }
+
+    public void setScreenBrightness(float amt) {
+        WindowManager.LayoutParams lparams = getWindow().getAttributes();
+        lparams.screenBrightness = amt;
+        getWindow().setAttributes(lparams);
+    }
+
+    public void setScreenOn() {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    public void setScreenOff() {
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    // takagen99: Added Theme Color
+    public int getThemeColor() {
+        TypedArray a = mContext.obtainStyledAttributes(R.styleable.themeColor);
+        int themeColor = a.getColor(R.styleable.themeColor_color_theme, 0);
+        return themeColor;
     }
 
     protected static BitmapDrawable globalWp = null;

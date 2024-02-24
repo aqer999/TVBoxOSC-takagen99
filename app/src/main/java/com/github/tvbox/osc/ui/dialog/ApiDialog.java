@@ -16,9 +16,9 @@ import com.github.tvbox.osc.server.ControlManager;
 import com.github.tvbox.osc.ui.activity.HomeActivity;
 import com.github.tvbox.osc.ui.adapter.ApiHistoryDialogAdapter;
 import com.github.tvbox.osc.ui.tv.QRCodeGen;
+import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.hjq.permissions.OnPermissionCallback;
-import com.hjq.permissions.Permission;
 import com.hjq.permissions.XXPermissions;
 import com.orhanobut.hawk.Hawk;
 
@@ -48,6 +48,12 @@ public class ApiDialog extends BaseDialog {
     public void refresh(RefreshEvent event) {
         if (event.type == RefreshEvent.TYPE_API_URL_CHANGE) {
             inputApi.setText((String) event.obj);
+        }
+        if (event.type == RefreshEvent.TYPE_LIVE_URL_CHANGE) {
+            inputLive.setText((String) event.obj);
+        }
+        if (event.type == RefreshEvent.TYPE_EPG_URL_CHANGE) {
+            inputEPG.setText((String) event.obj);
         }
     }
 
@@ -88,7 +94,6 @@ public class ApiDialog extends BaseDialog {
                     listener.onchange(newApi);
                     dismiss();
                 }
-
                 // Capture Live input into Settings & Live History (max 20)
                 Hawk.put(HawkConfig.LIVE_URL, newLive);
                 if (!newLive.isEmpty()) {
@@ -101,6 +106,14 @@ public class ApiDialog extends BaseDialog {
                 }
                 // Capture EPG input into Settings
                 Hawk.put(HawkConfig.EPG_URL, newEPG);
+                if (!newEPG.isEmpty()) {
+                    ArrayList<String> EPGHistory = Hawk.get(HawkConfig.EPG_HISTORY, new ArrayList<String>());
+                    if (!EPGHistory.contains(newEPG))
+                        EPGHistory.add(0, newEPG);
+                    if (EPGHistory.size() > 20)
+                        EPGHistory.remove(20);
+                    Hawk.put(HawkConfig.EPG_HISTORY, EPGHistory);
+                }
             }
         });
         findViewById(R.id.apiHistory).setOnClickListener(new View.OnClickListener() {
@@ -159,14 +172,42 @@ public class ApiDialog extends BaseDialog {
                 dialog.show();
             }
         });
+        findViewById(R.id.EPGHistory).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ArrayList<String> EPGHistory = Hawk.get(HawkConfig.EPG_HISTORY, new ArrayList<String>());
+                if (EPGHistory.isEmpty())
+                    return;
+                String current = Hawk.get(HawkConfig.EPG_URL, "");
+                int idx = 0;
+                if (EPGHistory.contains(current))
+                    idx = EPGHistory.indexOf(current);
+                ApiHistoryDialog dialog = new ApiHistoryDialog(getContext());
+                dialog.setTip(HomeActivity.getRes().getString(R.string.dia_history_epg));
+                dialog.setAdapter(new ApiHistoryDialogAdapter.SelectDialogInterface() {
+                    @Override
+                    public void click(String epgURL) {
+                        inputEPG.setText(epgURL);
+                        Hawk.put(HawkConfig.EPG_URL, epgURL);
+                        dialog.dismiss();
+                    }
+
+                    @Override
+                    public void del(String value, ArrayList<String> data) {
+                        Hawk.put(HawkConfig.EPG_HISTORY, data);
+                    }
+                }, EPGHistory, idx);
+                dialog.show();
+            }
+        });
         findViewById(R.id.storagePermission).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (XXPermissions.isGranted(getContext(), Permission.Group.STORAGE)) {
+                if (XXPermissions.isGranted(getContext(), DefaultConfig.StoragePermissionGroup())) {
                     Toast.makeText(getContext(), "已获得存储权限", Toast.LENGTH_SHORT).show();
                 } else {
                     XXPermissions.with(getContext())
-                            .permission(Permission.Group.STORAGE)
+                            .permission(DefaultConfig.StoragePermissionGroup())
                             .request(new OnPermissionCallback() {
                                 @Override
                                 public void onGranted(List<String> permissions, boolean all) {

@@ -9,6 +9,7 @@ import android.util.Log;
 
 import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.cache.CacheManager;
+import com.github.tvbox.osc.player.EXOmPlayer;
 import com.github.tvbox.osc.subtitle.model.Subtitle;
 import com.github.tvbox.osc.subtitle.model.Time;
 import com.github.tvbox.osc.util.FileUtils;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.TreeMap;
 
 import xyz.doikki.videoplayer.player.AbstractPlayer;
+import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 
 /**
  * @author AveryZhong.
@@ -90,7 +92,7 @@ public class DefaultSubtitleEngine implements SubtitleEngine {
                     String subtitleFile = subtitleFileCacheDir + subtitleLoadSuccessResult.fileName;
                     File cacheSubtitleFile = new File(subtitleFile);
                     boolean writeResult = FileUtils.writeSimple(subtitleLoadSuccessResult.content.getBytes(), cacheSubtitleFile);
-                    if (writeResult) {
+                    if (writeResult && playSubtitleCacheKey != null) {
                         CacheManager.save(MD5.string2MD5(getPlaySubtitleCacheKey()), subtitleFile);
                     }
                 } else {
@@ -200,6 +202,25 @@ public class DefaultSubtitleEngine implements SubtitleEngine {
             @Override
             public boolean handleMessage(final Message msg) {
                 try {
+                	if (mMediaPlayer != null && mMediaPlayer instanceof EXOmPlayer) {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                long delay = REFRESH_INTERVAL;
+                                long position = mMediaPlayer.getCurrentPosition();
+                                Subtitle subtitle = SubtitleFinder.find(position, mSubtitles);
+                                notifyRefreshUI(subtitle);
+                                if (subtitle != null) {
+                                    delay = subtitle.end.mseconds - position;
+                                }
+
+                                if (mWorkHandler != null) {
+                                    mWorkHandler.sendEmptyMessageDelayed(MSG_REFRESH, delay);
+                                }
+                            }
+                        });
+                        return true;
+                    }
                     long delay = REFRESH_INTERVAL;
                     if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
                         long position = mMediaPlayer.getCurrentPosition();
