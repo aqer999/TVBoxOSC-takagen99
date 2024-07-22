@@ -5,7 +5,6 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
-import android.app.RemoteAction;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -81,10 +80,13 @@ import com.github.tvbox.osc.util.AdBlocker;
 import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.FileUtils;
 import com.github.tvbox.osc.util.HawkConfig;
+import com.github.tvbox.osc.util.HawkUtils;
 import com.github.tvbox.osc.util.LOG;
+import com.github.tvbox.osc.util.M3U8;
 import com.github.tvbox.osc.util.MD5;
 import com.github.tvbox.osc.util.PlayerHelper;
 import com.github.tvbox.osc.util.StringUtils;
+import com.github.tvbox.osc.util.SubtitleHelper;
 import com.github.tvbox.osc.util.VideoParseRuler;
 import com.github.tvbox.osc.util.XWalkUtils;
 import com.github.tvbox.osc.util.thunder.Jianpian;
@@ -175,6 +177,12 @@ public class PlayActivity extends BaseActivity {
                 if (msg.what == 100) {
                     stopParse();
                     errorWithRetry("嗅探错误", false);
+                } else if (msg.what == 200) {
+                    if (mHandler.hasMessages(100)) {
+                        setTip("加载完成，嗅探视频中", true, false);
+                    }
+                } else if (msg.what == 300) {
+                    setTip((String)msg.obj, false, true);
                 }
                 return false;
             }
@@ -302,6 +310,7 @@ public class PlayActivity extends BaseActivity {
 
         });
         mVideoView.setVideoController(mController);
+        mVideoView.setmHandler(mHandler);
     }
 
     //设置字幕
@@ -394,13 +403,7 @@ public class PlayActivity extends BaseActivity {
     }
 
     void setSubtitleViewTextStyle(int style) {
-        if (style == 0) {
-            mController.mSubtitleView.setTextColor(getBaseContext().getResources().getColorStateList(R.color.color_FFFFFF));
-            mController.mSubtitleView.setShadowLayer(3, 2, 2, R.color.color_000000_80);
-        } else if (style == 1) {
-            mController.mSubtitleView.setTextColor(getBaseContext().getResources().getColorStateList(R.color.color_FFB6C1));
-            mController.mSubtitleView.setShadowLayer(3, 2, 2, R.color.color_FFFFFF);
-        }
+        SubtitleHelper.upTextStyle(mController.mSubtitleView,style);
     }
 
     void selectMyInternalSubtitle() {
@@ -561,7 +564,7 @@ public class PlayActivity extends BaseActivity {
     void openMyVideo() {
         Intent i = new Intent();
         i.addCategory(Intent.CATEGORY_DEFAULT);
-        i.setAction(android.content.Intent.ACTION_VIEW);
+        i.setAction(Intent.ACTION_VIEW);
         if (videoURL == null) return;
         i.setDataAndType(Uri.parse(videoURL), "video/*");
         startActivity(Intent.createChooser(i, "Open Video with ..."));
@@ -625,86 +628,6 @@ public class PlayActivity extends BaseActivity {
         return false;
     }
 
-    private String removeMinorityUrl(String tsUrlPre, String m3u8content) {
-        if (!m3u8content.startsWith("#EXTM3U")) return null;
-        String linesplit = "\n";
-        if (m3u8content.contains("\r\n"))
-            linesplit = "\r\n";
-        String[] lines = m3u8content.split(linesplit);
-
-        HashMap<String, Integer> preUrlMap = new HashMap<>();
-        for (String line : lines) {
-            if (line.length() == 0 || line.charAt(0) == '#') {
-                continue;
-            }
-            int ilast = line.lastIndexOf('.');
-            if (ilast <= 4) {
-                continue;
-            }
-            String preUrl = line.substring(0, ilast - 4);
-            Integer cnt = preUrlMap.get(preUrl);
-            if (cnt != null) {
-                preUrlMap.put(preUrl, cnt + 1);
-            } else {
-                preUrlMap.put(preUrl, 1);
-            }
-        }
-        if (preUrlMap.size() <= 1) return null;
-        if (preUrlMap.size() > 5) return null;//too many different url, can not identify ads url
-        int maxTimes = 0;
-        String maxTimesPreUrl = "";
-        for (Map.Entry<String, Integer> entry : preUrlMap.entrySet()) {
-            if (entry.getValue() > maxTimes) {
-                maxTimesPreUrl = entry.getKey();
-                maxTimes = entry.getValue();
-            }
-        }
-        if (maxTimes == 0) return null;
-
-        boolean dealedExtXKey = false;
-        for (int i = 0; i < lines.length; ++i) {
-            if (!dealedExtXKey && lines[i].startsWith("#EXT-X-KEY")) {
-                String keyUrl = "";
-                int start = lines[i].indexOf("URI=\"");
-                if (start != -1) {
-                    start += "URI=\"".length();
-                    int end = lines[i].indexOf("\"", start);
-                    if (end != -1) {
-                        keyUrl = lines[i].substring(start, end);
-                    }
-                    if (!keyUrl.startsWith("http://") && !keyUrl.startsWith("https://")) {
-                        String newKeyUrl;
-                        if (keyUrl.charAt(0) == '/') {
-                            int ifirst = tsUrlPre.indexOf('/', 9);//skip https://, http://
-                            newKeyUrl = tsUrlPre.substring(0, ifirst) + keyUrl;
-                        } else
-                            newKeyUrl = tsUrlPre + keyUrl;
-                        lines[i] = lines[i].replace("URI=\"" + keyUrl + "\"", "URI=\"" + newKeyUrl + "\"");
-                    }
-                    dealedExtXKey = true;
-                }
-            }
-            if (lines[i].length() == 0 || lines[i].charAt(0) == '#') {
-                continue;
-            }
-            if (lines[i].startsWith(maxTimesPreUrl)) {
-                if (!lines[i].startsWith("http://") && !lines[i].startsWith("https://")) {
-                    if (lines[i].charAt(0) == '/') {
-                        int ifirst = tsUrlPre.indexOf('/', 9);//skip https://, http://
-                        lines[i] = tsUrlPre.substring(0, ifirst) + lines[i];
-                    } else
-                        lines[i] = tsUrlPre + lines[i];
-                }
-            } else {
-                if (i > 0 && lines[i - 1].length() > 0 && lines[i - 1].charAt(0) == '#') {
-                    lines[i - 1] = "";
-                }
-                lines[i] = "";
-            }
-        }
-        return String.join(linesplit, lines);
-    }
-
     void playUrl(String url, HashMap<String, String> headers) {
         if (!Hawk.get(HawkConfig.VIDEO_PURIFY, true)) {
             startPlayUrl(url, headers);
@@ -728,7 +651,7 @@ public class PlayActivity extends BaseActivity {
                 .headers(hheaders)
                 .execute(new AbsCallback<String>() {
                     @Override
-                    public void onSuccess(com.lzy.okgo.model.Response<String> response) {
+                    public void onSuccess(Response<String> response) {
                         String content = response.body();
                         if (!content.startsWith("#EXTM3U")) {
                             startPlayUrl(url, headers);
@@ -766,7 +689,7 @@ public class PlayActivity extends BaseActivity {
                         if ("".equals(forwardurl)) {
                             int ilast = url.lastIndexOf('/');
 
-                            RemoteServer.m3u8Content = removeMinorityUrl(url.substring(0, ilast + 1), content);
+                            RemoteServer.m3u8Content = M3U8.purify(url.substring(0, ilast + 1), content);
                             if (RemoteServer.m3u8Content == null)
                                 startPlayUrl(url, headers);
                             else {
@@ -781,10 +704,10 @@ public class PlayActivity extends BaseActivity {
                                 .headers(hheaders)
                                 .execute(new AbsCallback<String>() {
                                     @Override
-                                    public void onSuccess(com.lzy.okgo.model.Response<String> response) {
+                                    public void onSuccess(Response<String> response) {
                                         String content = response.body();
                                         int ilast = finalforwardurl.lastIndexOf('/');
-                                        RemoteServer.m3u8Content = removeMinorityUrl(finalforwardurl.substring(0, ilast + 1), content);
+                                        RemoteServer.m3u8Content = M3U8.purify(finalforwardurl.substring(0, ilast + 1), content);
 
                                         if (RemoteServer.m3u8Content == null)
                                             startPlayUrl(finalforwardurl, headers);
@@ -800,7 +723,7 @@ public class PlayActivity extends BaseActivity {
                                     }
 
                                     @Override
-                                    public void onError(com.lzy.okgo.model.Response<String> response) {
+                                    public void onError(Response<String> response) {
                                         super.onError(response);
                                         startPlayUrl(url, headers);
                                     }
@@ -813,7 +736,7 @@ public class PlayActivity extends BaseActivity {
                     }
 
                     @Override
-                    public void onError(com.lzy.okgo.model.Response<String> response) {
+                    public void onError(Response<String> response) {
                         super.onError(response);
                         startPlayUrl(url, headers);
                     }
@@ -922,6 +845,10 @@ public class PlayActivity extends BaseActivity {
                             subtitle.content = ss.toString();
                             mController.mSubtitleView.onSubtitleChanged(subtitle);
                         }
+                    }else {
+                        Subtitle subtitle = new Subtitle();
+                        subtitle.content = "";
+                        mController.mSubtitleView.onSubtitleChanged(subtitle);
                     }
                 }
             });
@@ -1028,6 +955,9 @@ public class PlayActivity extends BaseActivity {
                                 headers.put(key, hds.getString(key));
                                 if (key.equalsIgnoreCase("user-agent")) {
                                     webUserAgent = hds.getString(key).trim();
+                                } else if (key.equalsIgnoreCase("cookie")) {
+                                    for (String split : hds.getString(key).split(";"))
+                                        CookieManager.getInstance().setCookie(url, split.trim());
                                 }
                             }
                             webHeaderMap = headers;
@@ -1071,8 +1001,22 @@ public class PlayActivity extends BaseActivity {
         }
         try {
             if (!mVodPlayerCfg.has("pl")) {
-                mVodPlayerCfg.put("pl", (sourceBean.getPlayerType() == -1) ? (int) Hawk.get(HawkConfig.PLAY_TYPE, 1) : sourceBean.getPlayerType());
+                int playType = Hawk.get(HawkConfig.PLAY_TYPE, 1);
+                boolean configurationFile = HawkUtils.getVodPlayerPreferredConfigurationFile();
+                int playerType = sourceBean.getPlayerType();
+                if (configurationFile && playerType != -1) {
+                    playType = playerType;
+                }
+                mVodPlayerCfg.put("pl", playType);
+            } else {
+                //如果手动修改过那么该处的默认值不生效
+//                boolean configurationFile = HawkUtils.getVodPlayerPreferredConfigurationFile();
+//                if (!configurationFile) {
+//                    int playType = Hawk.get(HawkConfig.PLAY_TYPE, 0);
+//                    mVodPlayerCfg.put("pl", playType);
+//                }
             }
+
             if (!mVodPlayerCfg.has("pr")) {
                 mVodPlayerCfg.put("pr", Hawk.get(HawkConfig.PLAY_RENDER, 0));
             }
@@ -1144,14 +1088,18 @@ public class PlayActivity extends BaseActivity {
             } else {
                 ratio = new Rational(16, 9);
             }
-            List<RemoteAction> actions = new ArrayList<>();
-            actions.add(generateRemoteAction(android.R.drawable.ic_media_previous, BROADCAST_ACTION_PREV, "Prev", "Play Previous"));
-            actions.add(generateRemoteAction(android.R.drawable.ic_media_play, BROADCAST_ACTION_PLAYPAUSE, "Play/Pause", "Play or Pause"));
-            actions.add(generateRemoteAction(android.R.drawable.ic_media_next, BROADCAST_ACTION_NEXT, "Next", "Play Next"));
+
+            List<android.app.RemoteAction> actions = new ArrayList<>();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                actions.add(generateRemoteAction(android.R.drawable.ic_media_previous, BROADCAST_ACTION_PREV, "Prev", "Play Previous"));
+                actions.add(generateRemoteAction(android.R.drawable.ic_media_play, BROADCAST_ACTION_PLAYPAUSE, "Play/Pause", "Play or Pause"));
+                actions.add(generateRemoteAction(android.R.drawable.ic_media_next, BROADCAST_ACTION_NEXT, "Next", "Play Next"));
+            }
             PictureInPictureParams params = new PictureInPictureParams.Builder()
                     .setAspectRatio(ratio)
                     .setActions(actions).build();
             enterPictureInPictureMode(params);
+
             mController.hideBottom();
             mVideoView.postDelayed(() -> {
                 if (!mVideoView.isPlaying()) {
@@ -1208,16 +1156,14 @@ public class PlayActivity extends BaseActivity {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private RemoteAction generateRemoteAction(int iconResId, int actionCode, String title, String desc) {
-
-        final PendingIntent intent =
-                PendingIntent.getBroadcast(
+    private android.app.RemoteAction generateRemoteAction(int iconResId, int actionCode, String title, String desc) {
+        final PendingIntent intent = PendingIntent.getBroadcast(
                         PlayActivity.this,
                         actionCode,
                         new Intent(BROADCAST_ACTION).putExtra("action", actionCode),
                         0);
         final Icon icon = Icon.createWithResource(PlayActivity.this, iconResId);
-        return (new RemoteAction(icon, title, desc, intent));
+        return (new android.app.RemoteAction(icon, title, desc, intent));
     }
 
     // takagen99 : PIP fix to close video when close window
@@ -1999,6 +1945,8 @@ public class PlayActivity extends BaseActivity {
             if (!click.isEmpty()) {
                 mSysWebView.loadUrl("javascript:" + click);
             }
+
+            mHandler.sendEmptyMessage(200);
         }
 
         WebResourceResponse checkIsVideo(String url, HashMap<String, String> headers) {

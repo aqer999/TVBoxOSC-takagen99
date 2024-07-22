@@ -21,6 +21,7 @@ import com.github.tvbox.osc.util.AES;
 import com.github.tvbox.osc.util.AdBlocker;
 import com.github.tvbox.osc.util.DefaultConfig;
 import com.github.tvbox.osc.util.HawkConfig;
+import com.github.tvbox.osc.util.M3U8;
 import com.github.tvbox.osc.util.MD5;
 import com.github.tvbox.osc.util.VideoParseRuler;
 import com.google.gson.Gson;
@@ -64,7 +65,7 @@ public class ApiConfig {
     private List<IJKCode> ijkCodes;
     private String spider = null;
     public String wallpaper = "";
-
+    public JsonArray livePlayHeaders;
     private final SourceBean emptyHome = new SourceBean();
 
     private final JarLoader jarLoader = new JarLoader();
@@ -309,9 +310,12 @@ public class ApiConfig {
         spider = DefaultConfig.safeJsonString(infoJson, "spider", "");
         // wallpaper
         wallpaper = DefaultConfig.safeJsonString(infoJson, "wallpaper", "");
+        // 直播播放请求头
+        livePlayHeaders = infoJson.getAsJsonArray("livePlayHeaders");
         // 远端站点源
         SourceBean firstSite = null;
-        for (JsonElement opt : infoJson.get("sites").getAsJsonArray()) {
+        JsonArray sites = infoJson.has("video") ? infoJson.getAsJsonObject("video").getAsJsonArray("sites") : infoJson.get("sites").getAsJsonArray();
+        for (JsonElement opt : sites) {
             JsonObject obj = (JsonObject) opt;
             SourceBean sb = new SourceBean();
             String siteKey = obj.get("key").getAsString().trim();
@@ -446,6 +450,7 @@ public class ApiConfig {
                         loadLives(infoJson.get("lives").getAsJsonArray());
                     } else {
                         JsonObject fengMiLives = infoJson.get("lives").getAsJsonArray().get(0).getAsJsonObject();
+                        Hawk.put(HawkConfig.LIVE_PLAYER_TYPE, DefaultConfig.safeJsonInt(fengMiLives, "playerType", -1));
                         String type = fengMiLives.get("type").getAsString();
                         if (type.equals("0")) {
                             String url = fengMiLives.get("url").getAsString();
@@ -502,38 +507,48 @@ public class ApiConfig {
         // Video parse rule for host
         if (infoJson.has("rules")) {
             VideoParseRuler.clearRule();
-            for (JsonElement oneHostRule : infoJson.getAsJsonArray("rules")) {
+            for(JsonElement oneHostRule : infoJson.getAsJsonArray("rules")) {
                 JsonObject obj = (JsonObject) oneHostRule;
-                ArrayList<String> hosts = new ArrayList<>();
-                if (obj.get("host") != null) {
-                    hosts.add(obj.get("host").getAsString());
-                } else if (obj.get("hosts") != null) {
-                    for (JsonElement host : obj.get("hosts").getAsJsonArray()) {
-                        hosts.add(host.getAsString());
-                    }
-                } else continue;
-                if (obj.has("rule") || obj.has("regex")) {
-                    JsonArray ruleJsonArr = obj.has("regex")?obj.getAsJsonArray("regex"):obj.getAsJsonArray("rule");
-                    ArrayList<String> rule = new ArrayList<>();
-                    for (JsonElement one : ruleJsonArr) {
-                        String oneRule = one.getAsString();
-                        rule.add(oneRule);
-                    }
-                    if (rule.size() > 0) {
-                        for (String host : hosts)
+                if (obj.has("host")) {
+                    String host = obj.get("host").getAsString();
+                    if (obj.has("rule")) {
+                        JsonArray ruleJsonArr = obj.getAsJsonArray("rule");
+                        ArrayList<String> rule = new ArrayList<>();
+                        for (JsonElement one : ruleJsonArr) {
+                            String oneRule = one.getAsString();
+                            rule.add(oneRule);
+                        }
+                        if (rule.size() > 0) {
                             VideoParseRuler.addHostRule(host, rule);
+                        }
+                    }
+                    if (obj.has("filter")) {
+                        JsonArray filterJsonArr = obj.getAsJsonArray("filter");
+                        ArrayList<String> filter = new ArrayList<>();
+                        for (JsonElement one : filterJsonArr) {
+                            String oneFilter = one.getAsString();
+                            filter.add(oneFilter);
+                        }
+                        if (filter.size() > 0) {
+                            VideoParseRuler.addHostFilter(host, filter);
+                        }
                     }
                 }
-                if (obj.has("filter")) {
-                    JsonArray filterJsonArr = obj.getAsJsonArray("filter");
-                    ArrayList<String> filter = new ArrayList<>();
-                    for (JsonElement one : filterJsonArr) {
-                        String oneFilter = one.getAsString();
-                        filter.add(oneFilter);
+                if (obj.has("hosts") && obj.has("regex")) {
+                    ArrayList<String> rule = new ArrayList<>();
+                    ArrayList<String> ads = new ArrayList<>();
+                    JsonArray regexArray = obj.getAsJsonArray("regex");
+                    for (JsonElement one : regexArray) {
+                        String regex = one.getAsString();
+                        if (M3U8.isAd(regex)) ads.add(regex);
+                        else rule.add(regex);
                     }
-                    if (filter.size() > 0) {
-                        for (String host : hosts)
-                            VideoParseRuler.addHostFilter(host, filter);
+
+                    JsonArray array = obj.getAsJsonArray("hosts");
+                    for (JsonElement one : array) {
+                        String host = one.getAsString();
+                        VideoParseRuler.addHostRule(host, rule);
+                        VideoParseRuler.addHostRegex(host, ads);
                     }
                 }
             }
@@ -755,6 +770,10 @@ public class ApiConfig {
                 return code;
         }
         return ijkCodes.get(0);
+    }
+
+    public JsonArray getLivePlayHeaders() {
+        return livePlayHeaders;
     }
 
     String clanToAddress(String lanLink) {
